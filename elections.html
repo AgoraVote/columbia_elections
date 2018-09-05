@@ -1,0 +1,185 @@
+<html>
+<link href="https://fonts.googleapis.com/css?family=Inconsolata" rel="stylesheet" type="text/css">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0-rc.2/css/materialize.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0-rc.2/js/materialize.min.js"></script>
+<script src="rest-client.min.js"></script>
+<script src="cothority.min.js"></script>
+<script src="kyber.min.js"></script>
+<script src="elections_config.js"></script>
+<script>
+const misc = cothority.misc
+const cocrypto = cothority.crypto
+const net = cothority.net
+
+const schnorr = kyber.sign.schnorr
+const ed = kyber.curve.edwards25519
+const group = new ed.Curve()
+
+const ca = new RestClient(cfg['ca-url'])
+ca.res('signVote')
+
+function generateSignature(pk, el_id, user_id, alpha, beta){
+    let secretKey = group.scalar()
+    secretKey.unmarshalBinary(misc.hexToUint8Array(pk));
+    const suid = user_id.toString();
+    const arr = []
+    for(i = 0 ; i < suid.length; i++) {
+        arr[i] = parseInt(suid[i]);
+    }
+    let msguid = new Uint8Array(arr);
+    msguid = misc.uint8ArrayToHex(msguid);
+    const msg = el_id + msguid + misc.uint8ArrayToHex(alpha) + misc.uint8ArrayToHex(beta);
+	const message = misc.hexToUint8Array(msg);
+    return schnorr.sign(group, secretKey, message);
+}
+
+function sendVote(cfg, user_id, votes) {
+  const sendingMessageName = "evoting.Cast"
+  const expectedMessageName = "evoting.CastReply"
+  const point = cocrypto.unmarshal(misc.hexToUint8Array(cfg['voting-key']))
+  
+  const messageToEncrypt = new Uint8Array(votes)
+  const encryptedMessage = cocrypto.elgamalEncrypt(point, messageToEncrypt)
+  const Alpha = cocrypto.marshal(encryptedMessage.Alpha)
+  const Beta = cocrypto.marshal(encryptedMessage.Beta)
+ 
+  const ballot = {
+      user: user_id,
+      alpha:  Alpha,
+      beta:  Beta
+  }
+
+  const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
+
+  signVote(user_id, Alpha, Beta, s=>{
+    const castMessage = {
+      id:  misc.hexToUint8Array(cfg['election-id']),
+      user: user_id,
+      signature: misc.hexToUint8Array(s),
+      ballot: ballot
+    }
+  
+    socket.send(sendingMessageName, expectedMessageName, castMessage)
+    .then((data) => {
+      console.log("WOW!" + JSON.stringify(data))
+    }).catch((err) => {
+      console.log("USER-ID: ", user_id ,", VOTES: ", votes)
+      console.log("errorrrr: ", err)
+    })
+  })
+}
+
+function signVote(user_id, alpha, beta, cb) {
+  ca.signVote.post({user: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
+    cb(JSON.parse(data))
+  }, (error)=>{
+    console.log("ERROR WITH SIGNATURE ACHTUNG", error)
+  })
+}
+
+let votes = [];
+
+function vote() {
+  let user_id = 1
+  const user_from_url = window.location.href.match(/user=(\d+)/)
+  if(user_from_url != null) {
+    user_id = parseInt(user_from_url[1]) // <====== USER SHOULD COME FROM CA
+  }
+  console.log("VOTING!", user_id, votes)
+  sendVote(cfg, user_id, votes)
+}
+
+function select(pos, candidate) {
+  votes[pos - 1] = candidate
+
+  const candidates = document.querySelectorAll('li[data-pos="' + pos + '"]')
+  
+  candidates.forEach((n, p)=>{
+    n.setAttribute('class', n.getAttribute('class').replace(/ active/, ''))
+    if(n.getAttribute("data-candidate") == candidate) {
+      n.setAttribute('class', n.getAttribute('class') + ' active')
+    }
+  })
+}
+
+function sendReconstruct(election_id, endpoint) {
+  const sendingMessageName = "evoting.Reconstruct"
+  const expectedMessageName = "evoting.ReconstructReply"
+  const castMessage = {
+    id:  misc.hexToUint8Array(election_id),
+  }
+
+  const socket = new net.Socket(endpoint, 'evoting')
+  let point = group.point()
+  socket.send(sendingMessageName, expectedMessageName, castMessage)
+  .then((data) => {
+    data.points.forEach(p=>{
+      point.unmarshalBinary(p)
+      console.log(point.data())
+    })
+  }).catch((err) => {
+    console.log("errorrrr: ", err)
+  })
+}
+
+function reconstruct() {
+  sendReconstruct(cfg['election-id'], cfg.endpoint)
+}
+</script>
+<div class="container">
+  <div class="row">
+<div id="secondary" class="section scrollspy">
+        <div class="row">
+          <div class="col s12">
+<div id="circle" class="section scrollspy">
+        <div class="row">
+          <div class="col s12">
+            <h3 class="header">El Presidente</h3>
+            <ul class="collection">
+              <li class="collection-item avatar" onclick="select(1, 1)" data-pos="1" data-candidate="1">
+                <i class="material-icons circle">face</i>
+                <span class="title">Vladimir Putin</span>
+                <p>High school of KGB<br>
+                   Most powerful dictator of current time
+                </p>
+              </li>
+              <li class="collection-item avatar" onclick="select(1, 2)" data-pos="1" data-candidate="2">
+                <i class="material-icons circle">face</i>
+                <span class="title">Alexey Navalny</span>
+                <p>Lawyer<br>
+                   Youtube politician/Anti-corruption activist
+                </p>
+              </li>
+            </ul>
+
+            <h3 class="header">Moscow Mayor</h3>
+            <ul class="collection">
+              <li class="collection-item avatar" onclick="select(2, 11)" data-pos="2" data-candidate="11">
+                <i class="material-icons circle">face</i>
+                <span class="title">Sobyanin</span>
+                <p>Reindeer herder<br>
+                   Money-spending enthusiast
+                </p>
+              </li>
+              <li class="collection-item avatar" onclick="select(2, 12)" data-pos="2" data-candidate="12">
+                <i class="material-icons circle green">insert_chart</i>
+                <span class="title">Unknown hero</span>
+                <p>City-manager<br>
+                   SimCity 2000 champion
+                </p>
+              </li>
+            </ul>
+ 
+          </div>
+
+        </div>
+      </div>
+          </div>
+        </div>
+      </div>
+  </div>
+    <a class="waves-effect waves-light btn" onclick="vote()">Vote</a>
+    <a class="waves-effect waves-light btn" onclick="reconstruct()">Results</a>
+</div>
+</html>
