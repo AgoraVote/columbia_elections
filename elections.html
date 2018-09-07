@@ -84,23 +84,34 @@ function signVote(cfg, user_id, alpha, beta, cb) {
   })
 }
 
+function getUserId(server, user_name, cb) {
+    ca = new RestClient(server);
+    ca.res('shardId');
+    ca.shardId.post({user_login: user_name}).then((data)=>{
+    cb(JSON.parse(data))
+  }, (error)=>{
+    console.log("ERROR WITH USER_ID", error)
+  })
+}
+
+
 let votes = [];
 
 function vote() {
-  let user_id = 15
-  const user_from_url = window.location.href.match(/user=(\d+)/)
-  if(user_from_url != null) {
-    user_id = parseInt(user_from_url[1]) // <====== USER SHOULD COME FROM CA
-  }
 
-  shard_id = user_id % 4;
-  if (shard_id == 0) { cfg = cfg0;}
-  if (shard_id == 1) { cfg = cfg1;}
-  if (shard_id == 2) { cfg = cfg2;}
-  if (shard_id == 3) { cfg = cfg3;}
-  
-  console.log("VOTING!", user_id, votes)
-  sendVote(cfg, user_id, votes)
+  user_login = 'ccc';
+	user_id = getUserId('http://23.111.231.243:7080', user_login, (data) => {
+	  user_id = data;
+	  //alert('user_id:' + user_id);
+	  shard_id = user_id % 4;
+	  if (shard_id == 0) { cfg = cfg0;}
+	  if (shard_id == 1) { cfg = cfg1;}
+	  if (shard_id == 2) { cfg = cfg2;}
+	  if (shard_id == 3) { cfg = cfg3;}
+	
+	  console.log("VOTING!", user_id, votes)
+	  sendVote(cfg, user_id, votes)
+	});
 }
 
 function select(pos, candidate) {
