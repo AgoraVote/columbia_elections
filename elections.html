@@ -38,7 +38,7 @@ function generateSignature(pk, el_id, user_id, alpha, beta){
     return schnorr.sign(group, secretKey, message);
 }
 
-function sendVote(cfg, user_id, votes) {
+function sendVote(cfg, user_login, user_id, votes) {
   const sendingMessageName = "evoting.Cast"
   const expectedMessageName = "evoting.CastReply"
   const point = cocrypto.unmarshal(misc.hexToUint8Array(cfg['voting-key']))
@@ -56,7 +56,7 @@ function sendVote(cfg, user_id, votes) {
 
   const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
 
-  signVote(cfg, user_id, Alpha, Beta, s=>{
+  signVote(cfg, user_login, user_id, Alpha, Beta, s=>{
     const castMessage = {
       id:  misc.hexToUint8Array(cfg['election-id']),
       user: user_id,
@@ -74,10 +74,10 @@ function sendVote(cfg, user_id, votes) {
   })
 }
 
-function signVote(cfg, user_id, alpha, beta, cb) {
+function signVote(cfg, user_login, user_id, alpha, beta, cb) {
     ca = new RestClient(cfg['ca-url']);
     ca.res('signVote')
-    ca.signVote.post({user: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
+    ca.signVote.post({user_login: user_login, user: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
     cb(JSON.parse(data))
   }, (error)=>{
     console.log("ERROR WITH SIGNATURE ACHTUNG", error)
@@ -100,7 +100,7 @@ let votes = [];
 function vote() {
 
   user_login = 'ccc';
-	user_id = getUserId('http://23.111.231.243:7080', user_login, (data) => {
+	user_id = getUserId(cfg0['uid-url'], user_login, (data) => {
 	  user_id = data;
 	  //alert('user_id:' + user_id);
 	  shard_id = user_id % 4;
@@ -110,7 +110,7 @@ function vote() {
 	  if (shard_id == 3) { cfg = cfg3;}
 	
 	  console.log("VOTING!", user_id, votes)
-	  sendVote(cfg, user_id, votes)
+	  sendVote(cfg, user_login, user_id, votes)
 	});
 }
 
