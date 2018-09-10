@@ -10,6 +10,7 @@
 <script src="elections_config1.js"></script>
 <script src="elections_config2.js"></script>
 <script src="elections_config3.js"></script>
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 
 <script>
 const misc = cothority.misc
@@ -67,6 +68,7 @@ function sendVote(cfg, user_login, user_id, votes) {
     socket.send(sendingMessageName, expectedMessageName, castMessage)
     .then((data) => {
       console.log("WOW!" + JSON.stringify(data))
+      alert('Congratulations! Your vote has been submitted')
     }).catch((err) => {
       console.log("USER-ID: ", user_id ,", VOTES: ", votes)
       console.log("errorrrr: ", err)
@@ -96,10 +98,13 @@ function getUserId(server, user_name, cb) {
 
 
 let votes = [];
+let election_results0 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
+let election_results1 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
+let alert_shown = 0 ; 
 
-function vote() {
+function vote(user_login) {
 
-  user_login = 'ccc';
+  //user_login = 'rrrrtt';
 	user_id = getUserId(cfg0['uid-url'], user_login, (data) => {
 	  user_id = data;
 	  //alert('user_id:' + user_id);
@@ -141,19 +146,73 @@ function sendReconstruct(election_id, endpoint) {
     data.points.forEach(p=>{
       point.unmarshalBinary(p)
       console.log(point.data())
+      d = point.data()
+      election_results0[d[0]] = election_results0[parseInt(d[0])]+1;
+      election_results1[d[1]] = election_results1[parseInt(d[1])]+1;	   
+
+      document.getElementById('piechart0').style.display = "block";
+      document.getElementById('piechart1').style.display = "block";
+
+      drawChart();
     })
   }).catch((err) => {
+    document.getElementById('piechart0').style.display = "none";
+    document.getElementById('piechart1').style.display = "none";
     console.log("errorrrr: ", err)
+
+    if(alert_shown == 0 ) {
+      alert('Error retrieving elections result, perhaps elections is not over yet?');
+      alert_shown = 1;
+    }
   })
 }
 
 function reconstruct() {
+  alert_shown = 0 ; 
   sendReconstruct(cfg0['election-id'], cfg0.endpoint)
   sendReconstruct(cfg1['election-id'], cfg1.endpoint)
   sendReconstruct(cfg2['election-id'], cfg2.endpoint)
   sendReconstruct(cfg3['election-id'], cfg3.endpoint)
 
+
+  google.charts.load('current', {'packages':['corechart']});
+  google.charts.setOnLoadCallback(drawChart);
 }
+
+
+      function drawChart() {
+
+        var data = google.visualization.arrayToDataTable([
+          ['President', 'Votes'],
+          ['Putin',    election_results0[1] ],
+          ['Navalny',  election_results0[2] ]
+        ]);
+
+        var options = {
+          title: 'Election results President'
+        };
+
+        var chart = new google.visualization.PieChart(document.getElementById('piechart0'));
+
+
+        chart.draw(data, options);
+
+        data = google.visualization.arrayToDataTable([
+          ['Mayor', 'Votes'],
+          ['Sobyanin',    election_results1[11] ],
+          ['Other guy',  election_results1[12] ]
+        ]);
+
+         options = {
+          title: 'Election results Mayor'
+        };
+
+         chart = new google.visualization.PieChart(document.getElementById('piechart1'));
+
+        chart.draw(data, options);
+      }
+
+
 </script>
 <div class="container">
   <div class="row">
@@ -161,6 +220,9 @@ function reconstruct() {
         <div class="row">
           <div class="col s12">
 <div id="circle" class="section scrollspy">
+	    <div id="piechart0" style="width: 900px; height: 500px; display:none;"></div>
+            <div id="piechart1" style="width: 900px; height: 500px; display:none;"></div>
+
         <div class="row">
           <div class="col s12">
             <h3 class="header">El Presidente</h3>
@@ -207,7 +269,7 @@ function reconstruct() {
         </div>
       </div>
   </div>
-    <a class="waves-effect waves-light btn" onclick="vote()">Vote</a>
+    <a class="waves-effect waves-light btn" onclick="vote('zzz3');">Vote</a>
     <a class="waves-effect waves-light btn" onclick="reconstruct()">Results</a>
 </div>
 </html>
