@@ -18,6 +18,47 @@ const schnorr = kyber.sign.schnorr
 const ed = kyber.curve.edwards25519
 const group = new ed.Curve()
 
+const casSettings = {}
+
+function parseURL(casSettings) {
+  const urlRegExp = /^(.*?html).*?(?:(?:&|\?)ticket=(.+?)(?:&|$))?/
+  const match = window.location.href.match(urlRegExp)
+  casSettings.service = match[1]
+  casSettings.ticket = match[2]
+}
+parseURL(casSettings)
+
+function casRedirect(casSettings) {
+  console.log("YOU ARE REDIRECTED TO CAS SERVER", cfg[0]['cas-url'] + '/login?service=' + encodeURIComponent(casSettings.service))
+}
+
+function casLoad(casSettings, cb) {
+  if(casSettings.ticket) {
+    const cas = new RestClient(cfg[0]['ca-url']);
+    cas.res('checkTicket')
+    cas.checkTicket.post({ticket: casSettings.ticket, service: casSettings.service})
+      .then(
+        data=>{
+          console.log("CA CAS RESPONSE", data)
+          if(data.status == 'success') {
+            Object.assign(casSettings, data)
+            cb(casSettings)
+          } else {
+            casRedirect(casSettings)
+          }
+        },
+        error=>{
+          console.log("CA CAS ERROR", error)
+        })
+  } else {
+    casRedirect(casSettings)
+  }
+}
+
+casLoad(casSettings, (casSettings)=>{ // CALL IT ON CLICK "participate"
+  console.log("CAS SUCCESS", casSettings);
+});
+
 function generateSignature(pk, el_id, user_id, alpha, beta){
     let secretKey = group.scalar()
     secretKey.unmarshalBinary(misc.hexToUint8Array(pk));
@@ -33,7 +74,7 @@ function generateSignature(pk, el_id, user_id, alpha, beta){
     return schnorr.sign(group, secretKey, message);
 }
 
-function sendVote(cfg, user_login, user_id, votes) {
+function sendVote(cfg, ticket, user_id, votes) {
   const sendingMessageName = "evoting.Cast"
   const expectedMessageName = "evoting.CastReply"
   const point = cocrypto.unmarshal(misc.hexToUint8Array(cfg['voting-key']))
@@ -51,7 +92,7 @@ function sendVote(cfg, user_login, user_id, votes) {
 
   const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
 
-  signVote(cfg, user_login, user_id, Alpha, Beta, s=>{
+  signVote(cfg, ticket, user_id, Alpha, Beta, s=>{
     const castMessage = {
       id:  misc.hexToUint8Array(cfg['election-id']),
       user: user_id,
@@ -70,37 +111,34 @@ function sendVote(cfg, user_login, user_id, votes) {
   })
 }
 
-function signVote(cfg, user_login, user_id, alpha, beta, cb) {
+function signVote(cfg, ticket, user_id, alpha, beta, cb) {
     ca = new RestClient(cfg['ca-url']);
     ca.res('signVote')
-    ca.signVote.post({user_login: user_login, user: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
+    ca.signVote.post({ticket: ticket, user_id: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
     cb(data)
   }, (error)=>{
     console.log("ERROR WITH SIGNATURE ACHTUNG", error)
   })
 }
 
-function getUserId(server, user_name, cb) {
-    ca = new RestClient(server);
-    ca.res('shardId');
-    ca.shardId.post({user_login: user_name}).then((data)=>{
-    cb(JSON.parse(data))
-  }, (error)=>{
-    console.log("ERROR WITH USER_ID", error)
-  })
-}
-
-
 let votes = [];
 let election_results0 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
 let election_results1 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
 let alert_shown = 0 ; 
 
-function vote(user_login) {
-  const user_id = 1;
-  const c = cfg[user_id % cfg.length];
+function vote() {
+  if(! casSettings.user_id) {
+    alert("user_id is not set!")
+    return
+  }
+  if(! casSettings.ticket) {
+    alert("ticket is not set!")
+    return
+  }
+  const user_id = casSettings.user_id
+  const c = cfg[user_id % cfg.length]
   console.log("VOTING!", user_id, votes)
-  sendVote(c, user_login, user_id, votes)
+  sendVote(c, casSettings.ticket, user_id, votes)
 }
 
 function select(pos, candidate) {
@@ -252,7 +290,7 @@ function reconstruct() {
         </div>
       </div>
   </div>
-    <a class="waves-effect waves-light btn" onclick="vote('zzz3');">Vote</a>
+    <a class="waves-effect waves-light btn" onclick="vote();">Vote</a>
     <a class="waves-effect waves-light btn" onclick="reconstruct()">Results</a>
 </div>
 </html>
