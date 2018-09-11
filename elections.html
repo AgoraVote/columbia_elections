@@ -6,10 +6,7 @@
 <script src="rest-client.min.js"></script>
 <script src="cothority.min.js"></script>
 <script src="kyber.min.js"></script>
-<script src="elections_config0.js"></script>
-<script src="elections_config1.js"></script>
-<script src="elections_config2.js"></script>
-<script src="elections_config3.js"></script>
+<script src="elections_config.js"></script>
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 
 <script>
@@ -20,9 +17,6 @@ const net = cothority.net
 const schnorr = kyber.sign.schnorr
 const ed = kyber.curve.edwards25519
 const group = new ed.Curve()
-
-//const ca = new RestClient(cfg['ca-url'])
-//ca.res('signVote')
 
 function generateSignature(pk, el_id, user_id, alpha, beta){
     let secretKey = group.scalar()
@@ -80,7 +74,7 @@ function signVote(cfg, user_login, user_id, alpha, beta, cb) {
     ca = new RestClient(cfg['ca-url']);
     ca.res('signVote')
     ca.signVote.post({user_login: user_login, user: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
-    cb(JSON.parse(data))
+    cb(data)
   }, (error)=>{
     console.log("ERROR WITH SIGNATURE ACHTUNG", error)
   })
@@ -103,20 +97,10 @@ let election_results1 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
 let alert_shown = 0 ; 
 
 function vote(user_login) {
-
-  //user_login = 'rrrrtt';
-	user_id = getUserId(cfg0['uid-url'], user_login, (data) => {
-	  user_id = data;
-	  //alert('user_id:' + user_id);
-	  shard_id = user_id % 4;
-	  if (shard_id == 0) { cfg = cfg0;}
-	  if (shard_id == 1) { cfg = cfg1;}
-	  if (shard_id == 2) { cfg = cfg2;}
-	  if (shard_id == 3) { cfg = cfg3;}
-	
-	  console.log("VOTING!", user_id, votes)
-	  sendVote(cfg, user_login, user_id, votes)
-	});
+  const user_id = 1;
+  const c = cfg[user_id % cfg.length];
+  console.log("VOTING!", user_id, votes)
+  sendVote(c, user_login, user_id, votes)
 }
 
 function select(pos, candidate) {
@@ -168,11 +152,10 @@ function sendReconstruct(election_id, endpoint) {
 }
 
 function reconstruct() {
-  alert_shown = 0 ; 
-  sendReconstruct(cfg0['election-id'], cfg0.endpoint)
-  sendReconstruct(cfg1['election-id'], cfg1.endpoint)
-  sendReconstruct(cfg2['election-id'], cfg2.endpoint)
-  sendReconstruct(cfg3['election-id'], cfg3.endpoint)
+  alert_shown = 0
+  cfg.forEach(c=>{ 
+    sendReconstruct(c['election-id'], c.endpoint)
+  })
 
 
   google.charts.load('current', {'packages':['corechart']});
