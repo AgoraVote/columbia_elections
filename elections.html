@@ -136,7 +136,7 @@ function vote() {
     return
   }
   const user_id = casSettings.user_id
-  const c = cfg[user_id % cfg.length]
+  const c = cfg[(user_id-1) % cfg.length]
   console.log("VOTING!", user_id, votes)
   sendVote(c, casSettings.ticket, user_id, votes)
 }
