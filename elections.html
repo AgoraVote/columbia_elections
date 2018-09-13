@@ -6,10 +6,79 @@
 <script src="rest-client.min.js"></script>
 <script src="cothority.min.js"></script>
 <script src="kyber.min.js"></script>
+<script src="temple_utils.js"></script>
+<script src="templates.js"></script>
+<script src="elections_candidates.js"></script>
 <script src="elections_config.js"></script>
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-
 <script>
+const pos_template = templates.get('positions')
+const sent_template = templates.get('sent')
+const auth_template = templates.get('auth')
+const welcome_template = templates.get('welcome')
+
+function needAuth() {
+  document.getElementById("positions").innerHTML = ""
+  auth_template[1].update({service: casSettings.service})  
+  document.getElementById("positions").appendChild(auth_template[0])
+}
+
+function saveBallot(ballot) {
+  const tos = {
+    user: ballot.user,
+    alpha: misc.uint8ArrayToHex(ballot.alpha),
+    beta: misc.uint8ArrayToHex(ballot.beta)
+  }
+  localStorage.setItem('lastVote', JSON.stringify(tos))
+}
+
+function logout() {
+  localStorage.removeItem('lastVote')
+  delete casSettings.user_id
+  document.getElementById("positions").innerHTML = ""
+  welcome_template[1].update({})
+  document.getElementById("positions").appendChild(welcome_template[0])
+}
+
+function loadBallot() {
+  const ballot = localStorage.getItem('lastVote')
+  if(ballot) {
+    const tor = JSON.parse(ballot)
+    tor.alpha = misc.hexToUint8Array(tor.alpha)
+    tor.beta = misc.hexToUint8Array(tor.beta)
+    return tor
+  }
+}
+
+function voteSent(ballot, votes) {
+  saveBallot(ballot)
+  document.getElementById("positions").innerHTML = ""
+  const alpha = misc.uint8ArrayToHex(ballot.alpha)
+  const beta = misc.uint8ArrayToHex(ballot.beta)
+  sent_template[1].update({
+    user_id: ballot.user,
+    alpha: alpha,
+    beta: beta
+  })
+  document.getElementById("positions").appendChild(sent_template[0])
+}
+
+function revote() {
+  document.getElementById("positions").innerHTML = ""
+  document.getElementById("positions").appendChild(pos_template[0])
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  const ballot = loadBallot()
+  if(ballot) {
+    voteSent(ballot)
+  } else if(casSettings.ticket) {
+    showBallot()
+  } else {
+    welcome_template[1].update({})
+    document.getElementById("positions").appendChild(welcome_template[0])
+  }
+})
 const misc = cothority.misc
 const cocrypto = cothority.crypto
 const net = cothority.net
@@ -29,7 +98,8 @@ function parseURL(casSettings) {
 parseURL(casSettings)
 
 function casRedirect(casSettings) {
-  console.log("YOU ARE REDIRECTED TO CAS SERVER", cfg[0]['cas-url'] + '/login?service=' + encodeURIComponent(casSettings.service))
+  needAuth()
+  //console.log("YOU ARE REDIRECTED TO CAS SERVER", cfg[0]['cas-url'] + '/login?service=' + encodeURIComponent(casSettings.service))
 }
 
 function casLoad(casSettings, cb) {
@@ -55,9 +125,14 @@ function casLoad(casSettings, cb) {
   }
 }
 
-casLoad(casSettings, (casSettings)=>{ // CALL IT ON CLICK "participate"
-  console.log("CAS SUCCESS", casSettings);
-});
+function showBallot() {
+  casLoad(casSettings, (casSettings)=>{ // CALL IT ON CLICK "participate"
+    console.log("CAS SUCCESS", casSettings);
+    document.getElementById("positions").innerHTML = ""
+    pos_template[1].update(elections_candidates)
+    document.getElementById("positions").appendChild(pos_template[0])
+  })
+}
 
 function sendVote(cfg, ticket, user_id, votes) {
   const sendingMessageName = "evoting.Cast"
@@ -91,7 +166,7 @@ function sendVote(cfg, ticket, user_id, votes) {
       socket.send(sendingMessageName, expectedMessageName, castMessage)
       .then(data => {
         console.log("WOW!" + JSON.stringify(data))
-        alert('Congratulations! Your vote has been submitted')
+        voteSent(ballot, votes)
       }).catch((err) => {
         console.log("USER-ID: ", user_id ,", VOTES: ", votes)
         console.log("errorrrr: ", err)
@@ -123,17 +198,14 @@ function signVote(cfg, ticket, user_id, alpha, beta, cb) {
 }
 
 let votes = [];
-let election_results0 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
-let election_results1 = [0,0,0,0,0,0,0,0,0,0,0,0,0];
-let alert_shown = 0 ; 
 
 function vote() {
   if(! casSettings.user_id) {
-    alert("user_id is not set!")
+    needAuth()
     return
   }
   if(! casSettings.ticket) {
-    alert("ticket is not set!")
+    needAuth()
     return
   }
   const user_id = casSettings.user_id
@@ -170,128 +242,30 @@ function sendReconstruct(election_id, endpoint) {
       point.unmarshalBinary(p)
       console.log(point.data())
       d = point.data()
-      election_results0[d[0]] = election_results0[parseInt(d[0])]+1;
-      election_results1[d[1]] = election_results1[parseInt(d[1])]+1;	   
-
-      document.getElementById('piechart0').style.display = "block";
-      document.getElementById('piechart1').style.display = "block";
-
-      drawChart();
     })
   }).catch((err) => {
-    document.getElementById('piechart0').style.display = "none";
-    document.getElementById('piechart1').style.display = "none";
-    console.log("errorrrr: ", err)
-
-    if(alert_shown == 0 ) {
-      alert('Error retrieving elections result, perhaps elections is not over yet?');
-      alert_shown = 1;
-    }
   })
 }
 
 function reconstruct() {
-  alert_shown = 0
   cfg.forEach(c=>{ 
     sendReconstruct(c['election-id'], c.endpoint)
   })
-
-
-  google.charts.load('current', {'packages':['corechart']});
-  google.charts.setOnLoadCallback(drawChart);
 }
-
-
-      function drawChart() {
-
-        var data = google.visualization.arrayToDataTable([
-          ['President', 'Votes'],
-          ['Putin',    election_results0[1] ],
-          ['Navalny',  election_results0[2] ]
-        ]);
-
-        var options = {
-          title: 'Election results President'
-        };
-
-        var chart = new google.visualization.PieChart(document.getElementById('piechart0'));
-
-
-        chart.draw(data, options);
-
-        data = google.visualization.arrayToDataTable([
-          ['Mayor', 'Votes'],
-          ['Sobyanin',    election_results1[11] ],
-          ['Other guy',  election_results1[12] ]
-        ]);
-
-         options = {
-          title: 'Election results Mayor'
-        };
-
-         chart = new google.visualization.PieChart(document.getElementById('piechart1'));
-
-        chart.draw(data, options);
-      }
-
-
 </script>
 <div class="container">
   <div class="row">
-<div id="secondary" class="section scrollspy">
-        <div class="row">
-          <div class="col s12">
-<div id="circle" class="section scrollspy">
-	    <div id="piechart0" style="width: 900px; height: 500px; display:none;"></div>
-            <div id="piechart1" style="width: 900px; height: 500px; display:none;"></div>
-
-        <div class="row">
-          <div class="col s12">
-            <h3 class="header">El Presidente</h3>
-            <ul class="collection">
-              <li class="collection-item avatar" onclick="select(1, 1)" data-pos="1" data-candidate="1">
-                <i class="material-icons circle">face</i>
-                <span class="title">Vladimir Putin</span>
-                <p>High school of KGB<br>
-                   Most powerful dictator of current time
-                </p>
-              </li>
-              <li class="collection-item avatar" onclick="select(1, 2)" data-pos="1" data-candidate="2">
-                <i class="material-icons circle">face</i>
-                <span class="title">Alexey Navalny</span>
-                <p>Lawyer<br>
-                   Youtube politician/Anti-corruption activist
-                </p>
-              </li>
-            </ul>
-
-            <h3 class="header">Moscow Mayor</h3>
-            <ul class="collection">
-              <li class="collection-item avatar" onclick="select(2, 11)" data-pos="2" data-candidate="11">
-                <i class="material-icons circle">face</i>
-                <span class="title">Sobyanin</span>
-                <p>Reindeer herder<br>
-                   Money-spending enthusiast
-                </p>
-              </li>
-              <li class="collection-item avatar" onclick="select(2, 12)" data-pos="2" data-candidate="12">
-                <i class="material-icons circle green">insert_chart</i>
-                <span class="title">Unknown hero</span>
-                <p>City-manager<br>
-                   SimCity 2000 champion
-                </p>
-              </li>
-            </ul>
- 
-          </div>
-
-        </div>
-      </div>
+    <div id="secondary" class="section scrollspy">
+      <div class="row">
+        <div class="col s12">
+          <div id="circle" class="section scrollspy">
+            <div class="row">
+              <div class="col s12" id="positions"></div>
+            </div>
           </div>
         </div>
       </div>
+    </div>
   </div>
-    <a class="waves-effect waves-light btn" onclick="vote();">Vote</a>
-    <a class="waves-effect waves-light btn" onclick="reconstruct()">Results</a>
 </div>
 </html>

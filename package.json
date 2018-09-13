@@ -1,0 +1,22 @@
+{
+  "name": "columbia_elections",
+  "version": "1.0.0",
+  "description": "Static SPA no backend needed",
+  "main": "index.js",
+  "scripts": {
+    "build": "./node_modules/.bin/temple -d templates/* >templates.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgoraVote/columbia_elections.git"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/AgoraVote/columbia_elections/issues"
+  },
+  "homepage": "https://github.com/AgoraVote/columbia_elections#readme",
+  "dependencies": {
+    "temple-wat": "^0.2.5"
+  }
+}
