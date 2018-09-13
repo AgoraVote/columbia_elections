@@ -59,21 +59,6 @@ casLoad(casSettings, (casSettings)=>{ // CALL IT ON CLICK "participate"
   console.log("CAS SUCCESS", casSettings);
 });
 
-function generateSignature(pk, el_id, user_id, alpha, beta){
-    let secretKey = group.scalar()
-    secretKey.unmarshalBinary(misc.hexToUint8Array(pk));
-    const suid = user_id.toString();
-    const arr = []
-    for(i = 0 ; i < suid.length; i++) {
-        arr[i] = parseInt(suid[i]);
-    }
-    let msguid = new Uint8Array(arr);
-    msguid = misc.uint8ArrayToHex(msguid);
-    const msg = el_id + msguid + misc.uint8ArrayToHex(alpha) + misc.uint8ArrayToHex(beta);
-	const message = misc.hexToUint8Array(msg);
-    return schnorr.sign(group, secretKey, message);
-}
-
 function sendVote(cfg, ticket, user_id, votes) {
   const sendingMessageName = "evoting.Cast"
   const expectedMessageName = "evoting.CastReply"
@@ -92,33 +77,49 @@ function sendVote(cfg, ticket, user_id, votes) {
 
   const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
 
-  signVote(cfg, ticket, user_id, Alpha, Beta, s=>{
-    const castMessage = {
-      id:  misc.hexToUint8Array(cfg['election-id']),
-      user: user_id,
-      signature: misc.hexToUint8Array(s),
-      ballot: ballot
-    }
+  signVote(cfg, ticket, user_id, Alpha, Beta, (error, s) => {
+    if(error) {
+      console.log(error)
+    } else {
+      const castMessage = {
+        id:  misc.hexToUint8Array(cfg['election-id']),
+        user: user_id,
+        signature: misc.hexToUint8Array(s),
+        ballot: ballot
+      }
   
-    socket.send(sendingMessageName, expectedMessageName, castMessage)
-    .then((data) => {
-      console.log("WOW!" + JSON.stringify(data))
-      alert('Congratulations! Your vote has been submitted')
-    }).catch((err) => {
-      console.log("USER-ID: ", user_id ,", VOTES: ", votes)
-      console.log("errorrrr: ", err)
-    })
+      socket.send(sendingMessageName, expectedMessageName, castMessage)
+      .then(data => {
+        console.log("WOW!" + JSON.stringify(data))
+        alert('Congratulations! Your vote has been submitted')
+      }).catch((err) => {
+        console.log("USER-ID: ", user_id ,", VOTES: ", votes)
+        console.log("errorrrr: ", err)
+      })
+    }
   })
 }
 
 function signVote(cfg, ticket, user_id, alpha, beta, cb) {
     ca = new RestClient(cfg['ca-url']);
     ca.res('signVote')
-    ca.signVote.post({ticket: ticket, user_id: user_id, alpha: misc.uint8ArrayToHex(alpha), beta: misc.uint8ArrayToHex(beta)}).then((data)=>{
-    cb(data)
-  }, (error)=>{
-    console.log("ERROR WITH SIGNATURE ACHTUNG", error)
-  })
+    ca.signVote.post({
+      ticket: ticket, 
+      user_id: user_id, 
+      alpha: misc.uint8ArrayToHex(alpha), 
+      beta: misc.uint8ArrayToHex(beta)
+    })
+    .then((data)=>{
+      console.log(data)
+      if(data.error) {
+        cb(data.error)
+      } else {
+        cb(undefined, data.signature)
+      }
+    }, (error)=>{
+      console.log("ERROR WITH SIGNATURE ACHTUNG", error)
+      cb(error)
+    })
 }
 
 let votes = [];
