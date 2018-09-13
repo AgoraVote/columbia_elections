@@ -63,11 +63,6 @@ function voteSent(ballot, votes) {
   document.getElementById("positions").appendChild(sent_template[0])
 }
 
-function revote() {
-  document.getElementById("positions").innerHTML = ""
-  document.getElementById("positions").appendChild(pos_template[0])
-}
-
 document.addEventListener("DOMContentLoaded", ()=>{
   const ballot = loadBallot()
   if(ballot) {
@@ -126,12 +121,19 @@ function casLoad(casSettings, cb) {
 }
 
 function showBallot() {
-  casLoad(casSettings, (casSettings)=>{ // CALL IT ON CLICK "participate"
-    console.log("CAS SUCCESS", casSettings);
+  function draw() {
     document.getElementById("positions").innerHTML = ""
     pos_template[1].update(elections_candidates)
     document.getElementById("positions").appendChild(pos_template[0])
-  })
+  }
+  if(casSettings.user_id && casSettings.ticket) {
+    draw()
+  } else {
+    casLoad(casSettings, (casSettings)=>{ // CALL IT ON CLICK "participate"
+      console.log("CAS SUCCESS", casSettings)
+      draw()
+    })
+  }
 }
 
 function sendVote(cfg, ticket, user_id, votes) {

@@ -5,7 +5,7 @@
         <span class="card-title">You need to authenticate yourself for voting</span>
         <p>
          No real CAS right now, you need to get URL with ticket with CLI<br/>
-         curl -v 'http://jonh:abracadabra@23.108.217.24:4000/login?service={{service}}'<br/>
+         curl -v 'http://john:abracadabra@23.108.217.24:4000/login?service={{service}}'<br/>
          curl -v 'http://bill:abracadabra@23.108.217.24:4000/login?service={{service}}'<br/>
          curl -v 'http://fred:abracadabra@23.108.217.24:4000/login?service={{service}}'<br/>
          curl -v 'http://joe:abracadabra@23.108.217.24:4000/login?service={{service}}'<br/>

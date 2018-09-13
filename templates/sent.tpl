@@ -11,7 +11,7 @@
         </p>
       </div>
       <div class="card-action">
-        <a href="#" onclick="revote()">Revote</a>
+        <a href="#" onclick="showBallot()">Revote</a>
         <a href="#" onclick="logout()">Logout</a>
       </div>
     </div>
