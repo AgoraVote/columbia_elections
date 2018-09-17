@@ -16,13 +16,11 @@ const pos_template = templates.get('positions')
 const sent_template = templates.get('sent')
 const auth_template = templates.get('auth')
 const welcome_template = templates.get('welcome')
-
 function needAuth() {
   document.getElementById("positions").innerHTML = ""
   auth_template[1].update({service: casSettings.service})  
   document.getElementById("positions").appendChild(auth_template[0])
 }
-
 function saveBallot(ballot) {
   const tos = {
     user: ballot.user,
@@ -31,7 +29,6 @@ function saveBallot(ballot) {
   }
   localStorage.setItem('lastVote', JSON.stringify(tos))
 }
-
 function logout() {
   localStorage.removeItem('lastVote')
   delete casSettings.user_id
@@ -39,7 +36,6 @@ function logout() {
   welcome_template[1].update({})
   document.getElementById("positions").appendChild(welcome_template[0])
 }
-
 function loadBallot() {
   const ballot = localStorage.getItem('lastVote')
   if(ballot) {
@@ -49,7 +45,6 @@ function loadBallot() {
     return tor
   }
 }
-
 function voteSent(ballot, votes) {
   saveBallot(ballot)
   document.getElementById("positions").innerHTML = ""
@@ -62,8 +57,7 @@ function voteSent(ballot, votes) {
   })
   document.getElementById("positions").appendChild(sent_template[0])
 }
-
-function electionInProgress() {
+document.addEventListener("DOMContentLoaded", ()=>{
   const ballot = loadBallot()
   if(ballot) {
     voteSent(ballot)
@@ -73,41 +67,14 @@ function electionInProgress() {
     welcome_template[1].update({})
     document.getElementById("positions").appendChild(welcome_template[0])
   }
-}
-
-document.addEventListener("DOMContentLoaded", ()=>{
-  let electionFinished = true
-  const results = {}
-
-  function reconstructDone(err, results) {
-    if(err) {
-      if(! electionFinished) return
-      if(err.message.indexOf('election not closed yet') != -1) {
-        electionFinished = false
-        electionInProgress()
-      } else {
-        console.error(err)
-      }
-    } else {
-      console.log(results)
-    }
-  }
-
-  cfg.forEach(c=>{
-    sendReconstruct(c['election-id'], c.endpoint, reconstructDone)
-  })
-
 })
 const misc = cothority.misc
 const cocrypto = cothority.crypto
 const net = cothority.net
-
 const schnorr = kyber.sign.schnorr
 const ed = kyber.curve.edwards25519
 const group = new ed.Curve()
-
 const casSettings = {}
-
 function parseURL(casSettings) {
   const urlRegExp = /^(.*?html).*?(?:(?:&|\?)ticket=(.+?)(?:&|$))?/
   const match = window.location.href.match(urlRegExp)
@@ -115,12 +82,10 @@ function parseURL(casSettings) {
   casSettings.ticket = match[2]
 }
 parseURL(casSettings)
-
 function casRedirect(casSettings) {
   needAuth()
   //console.log("YOU ARE REDIRECTED TO CAS SERVER", cfg[0]['cas-url'] + '/login?service=' + encodeURIComponent(casSettings.service))
 }
-
 function casLoad(casSettings, cb) {
   if(casSettings.ticket) {
     const cas = new RestClient(cfg[0]['ca-url']);
@@ -143,7 +108,6 @@ function casLoad(casSettings, cb) {
     casRedirect(casSettings)
   }
 }
-
 function showBallot() {
   function draw() {
     document.getElementById("positions").innerHTML = ""
@@ -159,7 +123,6 @@ function showBallot() {
     })
   }
 }
-
 function sendVote(cfg, ticket, user_id, votes) {
   const sendingMessageName = "evoting.Cast"
   const expectedMessageName = "evoting.CastReply"
@@ -175,9 +138,7 @@ function sendVote(cfg, ticket, user_id, votes) {
       alpha:  Alpha,
       beta:  Beta
   }
-
   const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
-
   signVote(cfg, ticket, user_id, Alpha, Beta, (error, s) => {
     if(error) {
       console.log(error)
@@ -200,7 +161,6 @@ function sendVote(cfg, ticket, user_id, votes) {
     }
   })
 }
-
 function signVote(cfg, ticket, user_id, alpha, beta, cb) {
     ca = new RestClient(cfg['ca-url']);
     ca.res('signVote')
@@ -222,9 +182,7 @@ function signVote(cfg, ticket, user_id, alpha, beta, cb) {
       cb(error)
     })
 }
-
 let votes = [];
-
 function vote() {
   if(! casSettings.user_id) {
     needAuth()
@@ -239,10 +197,8 @@ function vote() {
   console.log("VOTING!", user_id, votes)
   sendVote(c, casSettings.ticket, user_id, votes)
 }
-
 function select(pos, candidate) {
   votes[pos - 1] = candidate
-
   const candidates = document.querySelectorAll('li[data-pos="' + pos + '"]')
   
   candidates.forEach((n, p)=>{
@@ -252,30 +208,27 @@ function select(pos, candidate) {
     }
   })
 }
-
-function sendReconstruct(election_id, endpoint, cb) {
+function sendReconstruct(election_id, endpoint) {
   const sendingMessageName = "evoting.Reconstruct"
   const expectedMessageName = "evoting.ReconstructReply"
   const castMessage = {
     id:  misc.hexToUint8Array(election_id),
   }
-
   const socket = new net.Socket(endpoint, 'evoting')
   let point = group.point()
   socket.send(sendingMessageName, expectedMessageName, castMessage)
   .then((data) => {
-    const results = new Map()
     data.points.forEach(p=>{
       point.unmarshalBinary(p)
-      console.log(">>",point.data())
-      point.data().forEach((d, i)=>{
-        results.set(i, results.get(i) || 0 + d) 
-      })
+      console.log(point.data())
+      d = point.data()
     })
-    cb(undefined, results)
   }).catch((err) => {
-    //console.log(err)
-    cb(err)
+  })
+}
+function reconstruct() {
+  cfg.forEach(c=>{ 
+    sendReconstruct(c['election-id'], c.endpoint)
   })
 }
 </script>
