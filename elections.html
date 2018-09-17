@@ -63,7 +63,7 @@ function voteSent(ballot, votes) {
   document.getElementById("positions").appendChild(sent_template[0])
 }
 
-document.addEventListener("DOMContentLoaded", ()=>{
+function electionInProgress() {
   const ballot = loadBallot()
   if(ballot) {
     voteSent(ballot)
@@ -73,6 +73,30 @@ document.addEventListener("DOMContentLoaded", ()=>{
     welcome_template[1].update({})
     document.getElementById("positions").appendChild(welcome_template[0])
   }
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  let electionFinished = true
+  const results = {}
+
+  function reconstructDone(err, results) {
+    if(err) {
+      if(! electionFinished) return
+      if(err.message.indexOf('election not closed yet') != -1) {
+        electionFinished = false
+        electionInProgress()
+      } else {
+        console.error(err)
+      }
+    } else {
+      console.log(results)
+    }
+  }
+
+  cfg.forEach(c=>{
+    sendReconstruct(c['election-id'], c.endpoint, reconstructDone)
+  })
+
 })
 const misc = cothority.misc
 const cocrypto = cothority.crypto
@@ -229,7 +253,7 @@ function select(pos, candidate) {
   })
 }
 
-function sendReconstruct(election_id, endpoint) {
+function sendReconstruct(election_id, endpoint, cb) {
   const sendingMessageName = "evoting.Reconstruct"
   const expectedMessageName = "evoting.ReconstructReply"
   const castMessage = {
@@ -240,18 +264,18 @@ function sendReconstruct(election_id, endpoint) {
   let point = group.point()
   socket.send(sendingMessageName, expectedMessageName, castMessage)
   .then((data) => {
+    const results = new Map()
     data.points.forEach(p=>{
       point.unmarshalBinary(p)
-      console.log(point.data())
-      d = point.data()
+      console.log(">>",point.data())
+      point.data().forEach((d, i)=>{
+        results.set(i, results.get(i) || 0 + d) 
+      })
     })
+    cb(undefined, results)
   }).catch((err) => {
-  })
-}
-
-function reconstruct() {
-  cfg.forEach(c=>{ 
-    sendReconstruct(c['election-id'], c.endpoint)
+    //console.log(err)
+    cb(err)
   })
 }
 </script>
