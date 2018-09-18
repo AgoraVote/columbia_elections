@@ -11,11 +11,15 @@
 <script src="elections_candidates.js"></script>
 <script src="elections_config.js"></script>
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
 <script>
 const pos_template = templates.get('positions')
 const sent_template = templates.get('sent')
 const auth_template = templates.get('auth')
 const welcome_template = templates.get('welcome')
+const results_template = templates.get('results')
+
+
 function needAuth() {
   document.getElementById("positions").innerHTML = ""
   auth_template[1].update({service: casSettings.service})  
@@ -138,6 +142,7 @@ function sendVote(cfg, ticket, user_id, votes) {
       alpha:  Alpha,
       beta:  Beta
   }
+  console.log("creating socket");
   const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
   signVote(cfg, ticket, user_id, Alpha, Beta, (error, s) => {
     if(error) {
@@ -208,7 +213,11 @@ function select(pos, candidate) {
     }
   })
 }
+
+var election_results = elections_candidates;
+
 function sendReconstruct(election_id, endpoint) {
+
   const sendingMessageName = "evoting.Reconstruct"
   const expectedMessageName = "evoting.ReconstructReply"
   const castMessage = {
@@ -222,14 +231,59 @@ function sendReconstruct(election_id, endpoint) {
       point.unmarshalBinary(p)
       console.log(point.data())
       d = point.data()
+      for(c=0;c<d.length;c++) {
+        for(k = 0; k < election_results['positions'][c]['candidates'].length;k++) {
+          if(election_results['positions'][c]['candidates'][k]['cdd'] == d[c]) {
+	    election_results['positions'][c]['candidates'][k]['votes'] += 1
+	  }
+        }
+      }
     })
   }).catch((err) => {
   })
 }
+
+function drawChart() {
+    console.log('results2:', election_results);
+    for(i=0; i < election_results['positions'].length; i++) {
+      arr_data = []
+      arr_data[0] = [election_results['positions'][i]['name'], 'Votes']
+        for(k = 0; k<election_results['positions'][i]['candidates'].length; k++) {
+          arr_data[k+1] = [election_results['positions'][i]['candidates'][k]['name'], 
+	    	           election_results['positions'][i]['candidates'][k]['votes']]
+          //console.log("i:",i," k:",k," votes:", election_results['positions'][i]['candidates'][k]['votes'], election_results['positions'][i]['candidates'][k])
+        }
+      data = google.visualization.arrayToDataTable(arr_data)
+      options = {
+        title: 'Election results ' + election_results['positions'][i]['name']
+      };
+      chart = new google.visualization.PieChart(document.getElementById('piechart' + i ));
+      chart.draw(data, options);
+    }
+}
+
 function reconstruct() {
+  for(i=0; i < election_results['positions'].length; i++) {
+    election_results['positions'][i]['pid'] = i ;
+    //election_results[i] = [];
+    for (k = 0; k < election_results['positions'][i]['candidates'].length;k++) {
+      election_results['positions'][i]['candidates'][k]['votes'] = 0;
+    }
+  }
+
   cfg.forEach(c=>{ 
     sendReconstruct(c['election-id'], c.endpoint)
   })
+  console.log('results:', election_results);
+  setTimeout(function()
+    {
+	      document.getElementById("positions").innerHTML = ""
+	  results_template[1].update(election_results)
+	  document.getElementById("positions").appendChild(results_template[0])
+	  google.charts.load('current', {'packages':['corechart']});
+	  google.charts.setOnLoadCallback(drawChart);
+
+    }, 2000);
 }
 </script>
 <div class="container">
