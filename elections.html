@@ -19,6 +19,42 @@ const auth_template = templates.get('auth')
 const welcome_template = templates.get('welcome')
 const results_template = templates.get('results')
 
+function getStatus(cfg, resolve, reject) {
+  const sendingMessageName = "evoting.GetElectionStatus"
+  const expectedMessageName = "evoting.GetElectionStatusReply"
+  const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
+  const Message = {
+    id:  misc.hexToUint8Array(cfg['election-id'])
+  }
+   //console.log(ballotsMessage)
+  socket.send(sendingMessageName, expectedMessageName, Message)
+    .then((data) => {
+      resolve(data)
+    }).catch((err) => {
+      reject(err)
+    })
+}
+
+function getBallots(configs, user_id, cb) {
+  const cfg = configs[(user_id-1) % configs.length]
+  const sendingMessageName = "evoting.GetBallots"
+  const expectedMessageName = "evoting.GetBallotsReply"
+
+  const socket = new net.Socket(cfg.endpoint, 'evoting') // socket to talk to a conode
+  const ballotsMessage = {
+    id:  misc.hexToUint8Array(cfg['election-id']),
+    user: user_id,
+    lastOnly: false
+  }
+
+  socket.send(sendingMessageName, expectedMessageName, ballotsMessage)
+  .then((data) => {
+    console.log("WOW!" + JSON.stringify(data))
+    cb(data)
+  }).catch((err) => {
+    console.log("errorrrr: ", err)
+  })
+}
 
 function needAuth() {
   document.getElementById("positions").innerHTML = ""
@@ -54,17 +90,54 @@ function voteSent(ballot, votes) {
   document.getElementById("positions").innerHTML = ""
   const alpha = misc.uint8ArrayToHex(ballot.alpha)
   const beta = misc.uint8ArrayToHex(ballot.beta)
-  sent_template[1].update({
-    user_id: ballot.user,
-    alpha: alpha,
-    beta: beta
+  getBallots(cfg, ballot.user, (data)=>{
+    const tdata = data.ballots.map((b)=>{
+      return {
+        user: b.ballot.user,
+        alpha: misc.uint8ArrayToHex(b.ballot.alpha),
+        beta: misc.uint8ArrayToHex(b.ballot.beta),
+        signature: misc.uint8ArrayToHex(b.signature)
+      }
+    }).reverse()
+    if(tdata.length > 0) {
+      tdata[0].buttons = true
+    }
+    sent_template[1].update({ballots: tdata})
+    document.getElementById("positions").appendChild(sent_template[0])
   })
-  document.getElementById("positions").appendChild(sent_template[0])
 }
+
+function loadElectionState(resolve, reject) {
+  Promise.all(cfg.map((c)=>{
+    return new Promise(function(resolve, reject){return getStatus(c, resolve, reject)})
+  }))
+  .then((vals)=>{
+    const fullstate = vals.reduce((acc, d)=>{
+        acc.blocksCount += d.blocksCount 
+        acc.usersVoted += d.usersVoted
+        acc.votesCount += d.votesCount
+        acc.electionStage = Math.max(acc.electionStage, d.electionStage)
+        return acc
+      }, 
+      {
+        blocksCount: 0, 
+        usersVoted: 0, 
+        votesCount: 0, 
+        electionStage: 0
+      }
+    )
+    resolve(fullstate)
+  })
+  .catch((e)=>reject(e))
+}
+
 document.addEventListener("DOMContentLoaded", ()=>{
+  new Promise(loadElectionState).then(r=>{
+    console.log(r)
+  })
   const ballot = loadBallot()
   if(ballot) {
-    voteSent(ballot)
+   voteSent(ballot)
   } else if(casSettings.ticket) {
     showBallot()
   } else {
